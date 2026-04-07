@@ -1,0 +1,279 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); }
+.dashboard { padding: 1rem 0; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+.tab { padding: 6px 14px; border-radius: 20px; border: 0.5px solid var(--color-border-secondary); background: transparent; color: var(--color-text-secondary); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.tab.active { background: var(--color-background-secondary); color: var(--color-text-primary); border-color: var(--color-border-primary); font-weight: 500; }
+.tab:hover:not(.active) { background: var(--color-background-secondary); }
+.type-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; margin-left: 8px; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+.metric { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px; }
+.metric-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+.metric-value { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+.metric-sub { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.5rem; }
+.chart-card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1rem; }
+.chart-title { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 12px; }
+.round-grid { display: flex; flex-wrap: wrap; gap: 4px; }
+.round-dot { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; cursor: default; position: relative; }
+.overview-section { margin-bottom: 1.5rem; }
+.overview-title { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 12px; }
+.player-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.player-row:last-child { border-bottom: none; }
+.player-uid { font-size: 13px; font-weight: 500; min-width: 80px; color: var(--color-text-primary); font-family: var(--font-mono); }
+.bar-wrap { flex: 1; height: 8px; background: var(--color-background-secondary); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; }
+.player-stat { font-size: 12px; color: var(--color-text-secondary); min-width: 90px; text-align: right; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 1rem; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
+.legend-sq { width: 10px; height: 10px; border-radius: 2px; }
+.section-tabs { display: flex; gap: 6px; margin-bottom: 1rem; }
+.stab { padding: 5px 12px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: transparent; color: var(--color-text-secondary); font-size: 12px; cursor: pointer; }
+.stab.active { background: var(--color-background-secondary); color: var(--color-text-primary); border-color: var(--color-border-primary); }
+.tooltip-popup { position: absolute; bottom: 34px; left: 50%; transform: translateX(-50%); background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); padding: 6px 10px; font-size: 11px; white-space: nowrap; z-index: 10; display: none; pointer-events: none; color: var(--color-text-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.round-dot:hover .tooltip-popup { display: block; }
+</style>
+
+<div class="dashboard">
+
+<div class="tabs" id="playerTabs"></div>
+
+<div id="overview" class="overview-section">
+  <div class="legend">
+    <div class="legend-item"><div class="legend-sq" style="background:#1D9E75"></div>保守型</div>
+    <div class="legend-item"><div class="legend-sq" style="background:#378ADD"></div>中間型</div>
+    <div class="legend-item"><div class="legend-sq" style="background:#D85A30"></div>高風險型</div>
+    <div class="legend-item"><div class="legend-sq" style="background:#D4537E"></div>理性高效型</div>
+    <div class="legend-item"><div class="legend-sq" style="background:#BA7517"></div>邊緣不穩定型</div>
+  </div>
+  <div class="overview-title">10位玩家 — 爆球率排名</div>
+  <div id="playerList"></div>
+</div>
+
+<div id="playerDetail" style="display:none;">
+  <div class="metrics" id="metricsGrid"></div>
+  <div class="section-tabs">
+    <button class="stab active" onclick="showTab('trajectory',this)">行為軌跡</button>
+    <button class="stab" onclick="showTab('pumps',this)">每回合打氣數</button>
+    <button class="stab" onclick="showTab('earned',this)">每回合收益</button>
+  </div>
+  <div class="chart-card" id="mainChart" style="margin-bottom:1.5rem;">
+    <div class="chart-title" id="chartTitle">每回合行為軌跡（綠=成功收款 紅=爆球）</div>
+    <div id="chartContent"></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">打氣數 vs 爆球閾值（每回合）</div>
+    <div style="position:relative;height:200px;"><canvas id="compareChart"></canvas></div>
+  </div>
+</div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const DATA = [{"uid":"18f93a24","type":"中間搖擺型","total_rounds":20,"total_bursts":2,"burst_rate":10.0,"avg_pumps":30.2,"total_earned":57500,"rounds":[{"round":1,"pumps":56,"burst":false,"earned":5600.0,"burst_at":89.0},{"round":2,"pumps":40,"burst":false,"earned":4000.0,"burst_at":53.0},{"round":3,"pumps":57,"burst":false,"earned":5700.0,"burst_at":58.0},{"round":4,"pumps":65,"burst":false,"earned":6500.0,"burst_at":80.0},{"round":5,"pumps":9,"burst":true,"earned":0.0,"burst_at":9.0},{"round":6,"pumps":13,"burst":false,"earned":1300.0,"burst_at":72.0},{"round":7,"pumps":23,"burst":false,"earned":2300.0,"burst_at":64.0},{"round":8,"pumps":21,"burst":true,"earned":0.0,"burst_at":21.0},{"round":9,"pumps":23,"burst":false,"earned":2300.0,"burst_at":34.0},{"round":10,"pumps":28,"burst":false,"earned":2800.0,"burst_at":56.0},{"round":11,"pumps":24,"burst":false,"earned":2400.0,"burst_at":116.0},{"round":12,"pumps":21,"burst":false,"earned":2100.0,"burst_at":28.0},{"round":13,"pumps":22,"burst":false,"earned":2200.0,"burst_at":34.0},{"round":14,"pumps":30,"burst":false,"earned":3000.0,"burst_at":35.0},{"round":15,"pumps":25,"burst":false,"earned":2500.0,"burst_at":68.0},{"round":16,"pumps":28,"burst":false,"earned":2800.0,"burst_at":105.0},{"round":17,"pumps":23,"burst":false,"earned":2300.0,"burst_at":70.0},{"round":18,"pumps":22,"burst":false,"earned":2200.0,"burst_at":63.0},{"round":19,"pumps":26,"burst":false,"earned":2600.0,"burst_at":80.0},{"round":20,"pumps":49,"burst":false,"earned":4900.0,"burst_at":98.0}]},{"uid":"3148ef85","type":"邊緣不穩定型","total_rounds":19,"total_bursts":8,"burst_rate":42.1,"avg_pumps":57.0,"total_earned":69100,"rounds":[{"round":1,"pumps":47,"burst":false,"earned":4700.0,"burst_at":67.0},{"round":2,"pumps":59,"burst":true,"earned":0.0,"burst_at":59.0},{"round":3,"pumps":56,"burst":false,"earned":5600.0,"burst_at":91.0},{"round":4,"pumps":65,"burst":false,"earned":6500.0,"burst_at":111.0},{"round":5,"pumps":80,"burst":false,"earned":8000.0,"burst_at":84.0},{"round":6,"pumps":28,"burst":true,"earned":0.0,"burst_at":28.0},{"round":7,"pumps":55,"burst":true,"earned":0.0,"burst_at":55.0},{"round":8,"pumps":81,"burst":false,"earned":8100.0,"burst_at":99.0},{"round":9,"pumps":10,"burst":true,"earned":0.0,"burst_at":10.0},{"round":10,"pumps":82,"burst":false,"earned":8200.0,"burst_at":126.0},{"round":11,"pumps":84,"burst":false,"earned":8400.0,"burst_at":104.0},{"round":12,"pumps":90,"burst":false,"earned":9000.0,"burst_at":95.0},{"round":13,"pumps":19,"burst":true,"earned":0.0,"burst_at":19.0},{"round":14,"pumps":76,"burst":true,"earned":0.0,"burst_at":76.0},{"round":15,"pumps":46,"burst":true,"earned":0.0,"burst_at":46.0},{"round":16,"pumps":50,"burst":false,"earned":5000.0,"burst_at":94.0},{"round":17,"pumps":69,"burst":true,"earned":0.0,"burst_at":69.0},{"round":18,"pumps":56,"burst":false,"earned":5600.0,"burst_at":87.0},{"round":19,"pumps":30,"burst":false,"earned":0.0,"burst_at":55.0}]},{"uid":"5c8210e8","type":"中間搖擺型","total_rounds":20,"total_bursts":8,"burst_rate":40.0,"avg_pumps":35.8,"total_earned":55000,"rounds":[{"round":1,"pumps":10,"burst":true,"earned":0.0,"burst_at":10.0},{"round":2,"pumps":21,"burst":false,"earned":2100.0,"burst_at":48.0},{"round":3,"pumps":50,"burst":false,"earned":5000.0,"burst_at":102.0},{"round":4,"pumps":7,"burst":true,"earned":0.0,"burst_at":7.0},{"round":5,"pumps":33,"burst":false,"earned":3300.0,"burst_at":34.0},{"round":6,"pumps":50,"burst":false,"earned":5000.0,"burst_at":98.0},{"round":7,"pumps":50,"burst":false,"earned":5000.0,"burst_at":93.0},{"round":8,"pumps":50,"burst":false,"earned":5000.0,"burst_at":95.0},{"round":9,"pumps":50,"burst":false,"earned":5000.0,"burst_at":78.0},{"round":10,"pumps":13,"burst":true,"earned":0.0,"burst_at":13.0},{"round":11,"pumps":31,"burst":true,"earned":0.0,"burst_at":31.0},{"round":12,"pumps":50,"burst":false,"earned":5000.0,"burst_at":128.0},{"round":13,"pumps":18,"burst":true,"earned":0.0,"burst_at":18.0},{"round":14,"pumps":50,"burst":false,"earned":5000.0,"burst_at":67.0},{"round":15,"pumps":50,"burst":false,"earned":5000.0,"burst_at":118.0},{"round":16,"pumps":43,"burst":true,"earned":0.0,"burst_at":43.0},{"round":17,"pumps":19,"burst":true,"earned":0.0,"burst_at":19.0},{"round":18,"pumps":24,"burst":true,"earned":0.0,"burst_at":24.0},{"round":19,"pumps":46,"burst":false,"earned":4600.0,"burst_at":103.0},{"round":20,"pumps":50,"burst":false,"earned":5000.0,"burst_at":84.0}]},{"uid":"7e823413","type":"保守型","total_rounds":20,"total_bursts":3,"burst_rate":15.0,"avg_pumps":12.1,"total_earned":18900,"rounds":[{"round":1,"pumps":34,"burst":false,"earned":3400.0,"burst_at":57.0},{"round":2,"pumps":28,"burst":true,"earned":0.0,"burst_at":28.0},{"round":3,"pumps":16,"burst":false,"earned":1600.0,"burst_at":123.0},{"round":4,"pumps":12,"burst":true,"earned":0.0,"burst_at":12.0},{"round":5,"pumps":12,"burst":false,"earned":1200.0,"burst_at":74.0},{"round":6,"pumps":9,"burst":false,"earned":900.0,"burst_at":34.0},{"round":7,"pumps":12,"burst":true,"earned":0.0,"burst_at":12.0},{"round":8,"pumps":9,"burst":false,"earned":900.0,"burst_at":119.0},{"round":9,"pumps":7,"burst":false,"earned":700.0,"burst_at":119.0},{"round":10,"pumps":11,"burst":false,"earned":1100.0,"burst_at":60.0},{"round":11,"pumps":11,"burst":false,"earned":1100.0,"burst_at":40.0},{"round":12,"pumps":9,"burst":false,"earned":900.0,"burst_at":83.0},{"round":13,"pumps":10,"burst":false,"earned":1000.0,"burst_at":122.0},{"round":14,"pumps":9,"burst":false,"earned":900.0,"burst_at":118.0},{"round":15,"pumps":8,"burst":false,"earned":800.0,"burst_at":82.0},{"round":16,"pumps":14,"burst":false,"earned":1400.0,"burst_at":121.0},{"round":17,"pumps":9,"burst":false,"earned":900.0,"burst_at":10.0},{"round":18,"pumps":8,"burst":false,"earned":800.0,"burst_at":78.0},{"round":19,"pumps":7,"burst":false,"earned":700.0,"burst_at":93.0},{"round":20,"pumps":6,"burst":false,"earned":600.0,"burst_at":22.0}]},{"uid":"89b804f2","type":"高風險型","total_rounds":20,"total_bursts":15,"burst_rate":75.0,"avg_pumps":49.5,"total_earned":33000,"rounds":[{"round":1,"pumps":53,"burst":true,"earned":0.0,"burst_at":53.0},{"round":2,"pumps":16,"burst":true,"earned":0.0,"burst_at":16.0},{"round":3,"pumps":27,"burst":true,"earned":0.0,"burst_at":27.0},{"round":4,"pumps":100,"burst":false,"earned":10000.0,"burst_at":121.0},{"round":5,"pumps":73,"burst":true,"earned":0.0,"burst_at":73.0},{"round":6,"pumps":79,"burst":true,"earned":0.0,"burst_at":79.0},{"round":7,"pumps":60,"burst":true,"earned":0.0,"burst_at":60.0},{"round":8,"pumps":100,"burst":false,"earned":10000.0,"burst_at":101.0},{"round":9,"pumps":57,"burst":true,"earned":0.0,"burst_at":57.0},{"round":10,"pumps":29,"burst":true,"earned":0.0,"burst_at":29.0},{"round":11,"pumps":52,"burst":true,"earned":0.0,"burst_at":52.0},{"round":12,"pumps":48,"burst":false,"earned":4800.0,"burst_at":71.0},{"round":13,"pumps":1,"burst":true,"earned":0.0,"burst_at":1.0},{"round":14,"pumps":36,"burst":false,"earned":3600.0,"burst_at":115.0},{"round":15,"pumps":46,"burst":false,"earned":4600.0,"burst_at":51.0},{"round":16,"pumps":62,"burst":true,"earned":0.0,"burst_at":62.0},{"round":17,"pumps":89,"burst":true,"earned":0.0,"burst_at":89.0},{"round":18,"pumps":37,"burst":true,"earned":0.0,"burst_at":37.0},{"round":19,"pumps":5,"burst":true,"earned":0.0,"burst_at":5.0},{"round":20,"pumps":21,"burst":true,"earned":0.0,"burst_at":21.0}]},{"uid":"acabb8dc","type":"中間搖擺型","total_rounds":20,"total_bursts":4,"burst_rate":20.0,"avg_pumps":35.5,"total_earned":62000,"rounds":[{"round":1,"pumps":90,"burst":false,"earned":9000.0,"burst_at":99.0},{"round":2,"pumps":100,"burst":false,"earned":10000.0,"burst_at":104.0},{"round":3,"pumps":44,"burst":true,"earned":0.0,"burst_at":44.0},{"round":4,"pumps":14,"burst":true,"earned":0.0,"burst_at":14.0},{"round":5,"pumps":32,"burst":false,"earned":3200.0,"burst_at":113.0},{"round":6,"pumps":53,"burst":false,"earned":5300.0,"burst_at":124.0},{"round":7,"pumps":41,"burst":false,"earned":4100.0,"burst_at":46.0},{"round":8,"pumps":7,"burst":true,"earned":0.0,"burst_at":7.0},{"round":9,"pumps":42,"burst":false,"earned":4200.0,"burst_at":61.0},{"round":10,"pumps":28,"burst":false,"earned":2800.0,"burst_at":48.0},{"round":11,"pumps":29,"burst":false,"earned":2900.0,"burst_at":43.0},{"round":12,"pumps":25,"burst":true,"earned":0.0,"burst_at":25.0},{"round":13,"pumps":28,"burst":false,"earned":2800.0,"burst_at":110.0},{"round":14,"pumps":35,"burst":false,"earned":3500.0,"burst_at":74.0},{"round":15,"pumps":23,"burst":false,"earned":2300.0,"burst_at":28.0},{"round":16,"pumps":47,"burst":false,"earned":4700.0,"burst_at":48.0},{"round":17,"pumps":34,"burst":false,"earned":3400.0,"burst_at":39.0},{"round":18,"pumps":14,"burst":false,"earned":1400.0,"burst_at":23.0},{"round":19,"pumps":11,"burst":false,"earned":1100.0,"burst_at":24.0},{"round":20,"pumps":13,"burst":false,"earned":1300.0,"burst_at":76.0}]},{"uid":"b20e38a5","type":"中間偏高型","total_rounds":20,"total_bursts":9,"burst_rate":45.0,"avg_pumps":39.8,"total_earned":52600,"rounds":[{"round":1,"pumps":8,"burst":true,"earned":0.0,"burst_at":8.0},{"round":2,"pumps":40,"burst":false,"earned":4000.0,"burst_at":78.0},{"round":3,"pumps":35,"burst":true,"earned":0.0,"burst_at":35.0},{"round":4,"pumps":32,"burst":false,"earned":3200.0,"burst_at":107.0},{"round":5,"pumps":44,"burst":false,"earned":4400.0,"burst_at":61.0},{"round":6,"pumps":56,"burst":false,"earned":5600.0,"burst_at":59.0},{"round":7,"pumps":3,"burst":true,"earned":0.0,"burst_at":3.0},{"round":8,"pumps":14,"burst":true,"earned":0.0,"burst_at":14.0},{"round":9,"pumps":38,"burst":false,"earned":3800.0,"burst_at":102.0},{"round":10,"pumps":68,"burst":false,"earned":6800.0,"burst_at":94.0},{"round":11,"pumps":8,"burst":true,"earned":0.0,"burst_at":8.0},{"round":12,"pumps":73,"burst":true,"earned":0.0,"burst_at":73.0},{"round":13,"pumps":56,"burst":false,"earned":5600.0,"burst_at":90.0},{"round":14,"pumps":33,"burst":true,"earned":0.0,"burst_at":33.0},{"round":15,"pumps":52,"burst":false,"earned":5200.0,"burst_at":70.0},{"round":16,"pumps":49,"burst":true,"earned":0.0,"burst_at":49.0},{"round":17,"pumps":47,"burst":true,"earned":0.0,"burst_at":47.0},{"round":18,"pumps":48,"burst":false,"earned":4800.0,"burst_at":60.0},{"round":19,"pumps":46,"burst":false,"earned":4600.0,"burst_at":126.0},{"round":20,"pumps":46,"burst":false,"earned":4600.0,"burst_at":87.0}]},{"uid":"d15e06c3","type":"保守型","total_rounds":20,"total_bursts":3,"burst_rate":15.0,"avg_pumps":30.6,"total_earned":55500,"rounds":[{"round":1,"pumps":52,"burst":true,"earned":900.0,"burst_at":43.0},{"round":2,"pumps":22,"burst":false,"earned":2200.0,"burst_at":57.0},{"round":3,"pumps":19,"burst":true,"earned":800.0,"burst_at":11.0},{"round":4,"pumps":35,"burst":false,"earned":3500.0,"burst_at":55.0},{"round":5,"pumps":14,"burst":false,"earned":1400.0,"burst_at":60.0},{"round":6,"pumps":55,"burst":false,"earned":5500.0,"burst_at":56.0},{"round":7,"pumps":54,"burst":false,"earned":5400.0,"burst_at":102.0},{"round":8,"pumps":40,"burst":false,"earned":4000.0,"burst_at":64.0},{"round":9,"pumps":36,"burst":false,"earned":3600.0,"burst_at":76.0},{"round":10,"pumps":62,"burst":false,"earned":6200.0,"burst_at":99.0},{"round":11,"pumps":32,"burst":false,"earned":3200.0,"burst_at":87.0},{"round":12,"pumps":28,"burst":false,"earned":2800.0,"burst_at":104.0},{"round":13,"pumps":22,"burst":false,"earned":2200.0,"burst_at":102.0},{"round":14,"pumps":17,"burst":false,"earned":1700.0,"burst_at":90.0},{"round":15,"pumps":22,"burst":false,"earned":2200.0,"burst_at":120.0},{"round":16,"pumps":18,"burst":false,"earned":1800.0,"burst_at":22.0},{"round":17,"pumps":20,"burst":false,"earned":2000.0,"burst_at":57.0},{"round":18,"pumps":25,"burst":true,"earned":2300.0,"burst_at":2.0},{"round":19,"pumps":23,"burst":false,"earned":2300.0,"burst_at":48.0},{"round":20,"pumps":15,"burst":false,"earned":1500.0,"burst_at":111.0}]},{"uid":"e65b9f78","type":"理性高效型","total_rounds":20,"total_bursts":7,"burst_rate":35.0,"avg_pumps":47.9,"total_earned":81900,"rounds":[{"round":1,"pumps":30,"burst":false,"earned":3000.0,"burst_at":24.0},{"round":2,"pumps":24,"burst":true,"earned":1300.0,"burst_at":99.0},{"round":3,"pumps":40,"burst":false,"earned":4000.0,"burst_at":31.0},{"round":4,"pumps":44,"burst":false,"earned":4400.0,"burst_at":31.0},{"round":5,"pumps":58,"burst":true,"earned":0.0,"burst_at":24.0},{"round":6,"pumps":60,"burst":false,"earned":6000.0,"burst_at":30.0},{"round":7,"pumps":16,"burst":true,"earned":1300.0,"burst_at":111.0},{"round":8,"pumps":57,"burst":false,"earned":5700.0,"burst_at":124.0},{"round":9,"pumps":43,"burst":false,"earned":4300.0,"burst_at":94.0},{"round":10,"pumps":49,"burst":true,"earned":2300.0,"burst_at":58.0},{"round":11,"pumps":83,"burst":false,"earned":8300.0,"burst_at":120.0},{"round":12,"pumps":61,"burst":false,"earned":6100.0,"burst_at":82.0},{"round":13,"pumps":62,"burst":false,"earned":6200.0,"burst_at":78.0},{"round":14,"pumps":41,"burst":false,"earned":4100.0,"burst_at":47.0},{"round":15,"pumps":57,"burst":false,"earned":5700.0,"burst_at":68.0},{"round":16,"pumps":42,"burst":true,"earned":2900.0,"burst_at":60.0},{"round":17,"pumps":42,"burst":true,"earned":3200.0,"burst_at":10.0},{"round":18,"pumps":53,"burst":false,"earned":5300.0,"burst_at":39.0},{"round":19,"pumps":50,"burst":false,"earned":5000.0,"burst_at":90.0},{"round":20,"pumps":46,"burst":true,"earned":2800.0,"burst_at":80.0}]},{"uid":"ea3e8640","type":"高風險型","total_rounds":20,"total_bursts":14,"burst_rate":70.0,"avg_pumps":48.8,"total_earned":41100,"rounds":[{"round":1,"pumps":75,"burst":true,"earned":0.0,"burst_at":75.0},{"round":2,"pumps":55,"burst":true,"earned":0.0,"burst_at":55.0},{"round":3,"pumps":16,"burst":true,"earned":0.0,"burst_at":16.0},{"round":4,"pumps":45,"burst":true,"earned":0.0,"burst_at":45.0},{"round":5,"pumps":4,"burst":true,"earned":0.0,"burst_at":4.0},{"round":6,"pumps":101,"burst":false,"earned":10100.0,"burst_at":125.0},{"round":7,"pumps":15,"burst":true,"earned":0.0,"burst_at":15.0},{"round":8,"pumps":33,"burst":true,"earned":0.0,"burst_at":33.0},{"round":9,"pumps":10,"burst":true,"earned":0.0,"burst_at":10.0},{"round":10,"pumps":18,"burst":true,"earned":0.0,"burst_at":18.0},{"round":11,"pumps":53,"burst":true,"earned":0.0,"burst_at":53.0},{"round":12,"pumps":60,"burst":true,"earned":0.0,"burst_at":60.0},{"round":13,"pumps":42,"burst":true,"earned":0.0,"burst_at":42.0},{"round":14,"pumps":76,"burst":false,"earned":7600.0,"burst_at":94.0},{"round":15,"pumps":66,"burst":false,"earned":6600.0,"burst_at":124.0},{"round":16,"pumps":67,"burst":false,"earned":6700.0,"burst_at":68.0},{"round":17,"pumps":70,"burst":true,"earned":0.0,"burst_at":70.0},{"round":18,"pumps":68,"burst":true,"earned":0.0,"burst_at":68.0},{"round":19,"pumps":61,"burst":false,"earned":6100.0,"burst_at":76.0},{"round":20,"pumps":40,"burst":false,"earned":4000.0,"burst_at":112.0}]}];
+
+const TYPE_COLORS = {
+  '保守型': '#1D9E75',
+  '中間搖擺型': '#378ADD',
+  '中間偏高型': '#7F77DD',
+  '高風險型': '#D85A30',
+  '理性高效型': '#D4537E',
+  '邊緣不穩定型': '#BA7517'
+};
+
+const TYPE_BG = {
+  '保守型': '#E1F5EE',
+  '中間搖擺型': '#E6F1FB',
+  '中間偏高型': '#EEEDFE',
+  '高風險型': '#FAECE7',
+  '理性高效型': '#FBEAF0',
+  '邊緣不穩定型': '#FAEEDA'
+};
+
+let currentTab = 'trajectory';
+let compareChartInstance = null;
+
+function getTypeColor(type) { return TYPE_COLORS[type] || '#888'; }
+function getTypeBg(type) { return TYPE_BG[type] || '#f5f5f5'; }
+
+function buildOverview() {
+  const sorted = [...DATA].sort((a,b) => a.burst_rate - b.burst_rate);
+  const maxEarned = Math.max(...DATA.map(d=>d.total_earned));
+  const list = document.getElementById('playerList');
+  list.innerHTML = sorted.map(p => {
+    const c = getTypeColor(p.type);
+    return `<div class="player-row">
+      <span class="player-uid" style="color:${c}">${p.uid}</span>
+      <div style="min-width:60px;font-size:11px;color:var(--color-text-secondary);">${p.type}</div>
+      <div class="bar-wrap">
+        <div class="bar-fill" style="width:${p.burst_rate}%;background:${c};"></div>
+      </div>
+      <div class="player-stat">爆球率 <strong>${p.burst_rate}%</strong></div>
+      <div class="player-stat" style="min-width:110px;">$${p.total_earned.toLocaleString()}</div>
+    </div>`;
+  }).join('');
+}
+
+function buildTabs() {
+  const tabs = document.getElementById('playerTabs');
+  tabs.innerHTML = `<button class="tab active" onclick="selectPlayer('overview',this)">總覽</button>` +
+    DATA.map(p => `<button class="tab" onclick="selectPlayer('${p.uid}',this)" style="border-left:3px solid ${getTypeColor(p.type)}">${p.uid}</button>`).join('');
+}
+
+function selectPlayer(uid, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  if (uid === 'overview') {
+    document.getElementById('overview').style.display = 'block';
+    document.getElementById('playerDetail').style.display = 'none';
+    return;
+  }
+  const p = DATA.find(d => d.uid === uid);
+  document.getElementById('overview').style.display = 'none';
+  document.getElementById('playerDetail').style.display = 'block';
+  renderPlayer(p);
+}
+
+function renderPlayer(p) {
+  const c = getTypeColor(p.type);
+  const bg = getTypeBg(p.type);
+  const m = document.getElementById('metricsGrid');
+  m.innerHTML = `
+    <div class="metric">
+      <div class="metric-label">人格類型</div>
+      <div class="metric-value" style="font-size:16px;color:${c}">${p.type}</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">爆球率</div>
+      <div class="metric-value">${p.burst_rate}%</div>
+      <div class="metric-sub">${p.total_bursts}/${p.total_rounds} 回合</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">平均打氣數</div>
+      <div class="metric-value">${p.avg_pumps}</div>
+      <div class="metric-sub">次 / 回合</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">總收益</div>
+      <div class="metric-value" style="font-size:18px;">$${p.total_earned.toLocaleString()}</div>
+    </div>
+  `;
+  renderTab(p);
+  renderCompareChart(p);
+}
+
+function showTab(tab, btn) {
+  currentTab = tab;
+  document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const p = DATA.find(d => d.uid === document.querySelector('.tab.active:not(:first-child)').textContent);
+  if (p) renderTab(p);
+}
+
+function renderTab(p) {
+  const container = document.getElementById('chartContent');
+  const title = document.getElementById('chartTitle');
+  
+  if (currentTab === 'trajectory') {
+    title.textContent = '行為軌跡 — 每回合結果（綠=收款 紅=爆球）';
+    const dots = p.rounds.map(r => {
+      const bg = r.burst ? '#FAECE7' : '#E1F5EE';
+      const border = r.burst ? '#D85A30' : '#1D9E75';
+      const txt = r.burst ? '#D85A30' : '#1D9E75';
+      return `<div class="round-dot" style="background:${bg};border:1.5px solid ${border};color:${txt};">
+        <div class="tooltip-popup">第${r.round}回<br>打氣:${r.pumps}次<br>${r.burst?'💥爆球':'✓$'+r.earned.toLocaleString()}</div>
+        ${r.round}
+      </div>`;
+    }).join('');
+    container.innerHTML = `<div class="round-grid">${dots}</div>`;
+  } else if (currentTab === 'pumps') {
+    title.textContent = '每回合打氣次數';
+    container.innerHTML = `<div style="position:relative;height:180px;"><canvas id="pumpsChart"></canvas></div>`;
+    setTimeout(() => {
+      if(window._pumpsChart) window._pumpsChart.destroy();
+      window._pumpsChart = new Chart(document.getElementById('pumpsChart'), {
+        type: 'bar',
+        data: {
+          labels: p.rounds.map(r => r.round),
+          datasets: [{
+            data: p.rounds.map(r => r.pumps),
+            backgroundColor: p.rounds.map(r => r.burst ? 'rgba(216,90,48,0.7)' : 'rgba(29,158,117,0.7)'),
+            borderRadius: 3
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { font: { size: 11 } } }, y: { ticks: { font: { size: 11 } } } }
+        }
+      });
+    }, 50);
+  } else {
+    title.textContent = '每回合收益（元）';
+    container.innerHTML = `<div style="position:relative;height:180px;"><canvas id="earnChart"></canvas></div>`;
+    setTimeout(() => {
+      if(window._earnChart) window._earnChart.destroy();
+      window._earnChart = new Chart(document.getElementById('earnChart'), {
+        type: 'bar',
+        data: {
+          labels: p.rounds.map(r => r.round),
+          datasets: [{
+            data: p.rounds.map(r => r.earned),
+            backgroundColor: p.rounds.map(r => r.burst ? 'rgba(216,90,48,0.5)' : 'rgba(55,138,221,0.7)'),
+            borderRadius: 3
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { font: { size: 11 } } }, y: { ticks: { font: { size: 11 }, callback: v => '$'+v.toLocaleString() } } }
+        }
+      });
+    }, 50);
+  }
+}
+
+function renderCompareChart(p) {
+  setTimeout(() => {
+    if (compareChartInstance) compareChartInstance.destroy();
+    compareChartInstance = new Chart(document.getElementById('compareChart'), {
+      type: 'line',
+      data: {
+        labels: p.rounds.map(r => r.round),
+        datasets: [
+          {
+            label: '打氣次數',
+            data: p.rounds.map(r => r.pumps),
+            borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.08)',
+            tension: 0.3, pointRadius: 4,
+            pointBackgroundColor: p.rounds.map(r => r.burst ? '#D85A30' : '#378ADD')
+          },
+          {
+            label: '爆球閾值',
+            data: p.rounds.map(r => r.burst_at),
+            borderColor: '#D85A30', borderDash: [4,3],
+            tension: 0.3, pointRadius: 3, backgroundColor: 'transparent'
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.raw } }
+        },
+        scales: {
+          x: { ticks: { font: { size: 11 }, autoSkip: false } },
+          y: { ticks: { font: { size: 11 } } }
+        }
+      }
+    });
+  }, 50);
+}
+
+buildTabs();
+buildOverview();
+</script>
